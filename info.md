@@ -1,19 +1,12 @@
-## Information:
-Track the score of your favorite NHL team and create automations based on your team scoring!
+## Information
 
-See [example automations](https://github.com/JayBlackedOut/hass-nhlapi/blob/master/automations.md) to help you get started.
+Track the score and schedule for your favorite NHL team in Home Assistant and use `nhl_goal` events to drive automations.
 
+This integration is configured from **Settings > Devices & Services > Add Integration**. Legacy YAML platform setup is no longer supported.
 
+## Documentation
 
-## Usage:
-Add to configuration.yaml:
-
-```
-sensor:
-  - platform: nhl_api
-    team_abbrev: [TEAM ABBREV OF TRACKED TEAM - REFER TO DOCS]
-    name: [(Optional) FRIENDLY NAME OF SENSOR - DEFAULT: NHL Sensor]
-    scan_interval: [(Optional) SCAN INTERVAL IN SECONDS FOR LIVE GAME - DEFAULT: 1]
-```
-## Documentation:
-Please refer to the [documentation](https://github.com/JayBlackedOut/hass-nhlapi/) in the repository.
+- Main documentation: [README.md](./README.md)
+- Team abbreviations: [teams.md](./teams.md)
+- Automation examples: [automations.md](./automations.md)
+- Frontend examples: [frontend.md](./frontend.md)
