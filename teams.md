@@ -1,3 +1,7 @@
+# Team Abbreviations
+
+The config flow now lets you choose a team from a dropdown. This table is still useful for event payloads, templates, and any automation logic that references the stored uppercase team abbreviations.
+
 | Team Name             | Team ID | Team Abbr |
 |-----------------------|---------|-----------|
 | Anaheim Ducks         | 24      | ANA       |
@@ -27,7 +31,7 @@
 | St. Louis Blues       | 19      | STL       |
 | Tampa Bay Lightning   | 14      | TBL       |
 | Toronto Maple Leafs   | 10      | TOR       |
-| Utah Hockey Club      | 59      | UTA       |
+| Utah Mammoth          | 68      | UTA       |
 | Vancouver Canucks     | 23      | VAN       |
 | Vegas Golden Knights  | 54      | VGK       |
 | Washington Capitals   | 15      | WSH       |

@@ -1,84 +1,52 @@
 # Frontend Example
-The goal is to eventually have a custom lovelace card to display the sensor's information. In the meantime, a makeshift scoreboard can be created using template sensors. Follow the steps below to get a result similar to this:
 
-When no game is scheduled:
+This repository does not include a dedicated Lovelace card, but the sensor exposes enough data to build a lightweight scoreboard with template sensors and a standard entities card.
 
-![No games scheduled](./no_game.png) 
+Example screenshots:
 
-When a game is scheduled:
+- No game scheduled: ![No games scheduled](./no_game.png)
+- Game scheduled or live: ![With a game scheduled](./with_game.png)
 
-![With a game scheduled](./with_game.png)
+## Template Sensors
 
-## Configuration
-**The below will only work on Home Assistant Core pre 2021.8.X:**
+Replace `sensor.canadiens` with your NHL sensor entity ID.
 
-`configuration.yaml`
-
-Change `sensor.nhl_sensor` to your sensor's `device_id`:
-```yaml
-sensor:
-  - platform: template
-    sensors:
-      away_team:
-        friendly_name_template: '{{ states.sensor.nhl_sensor.attributes.away_name }}'
-        value_template: '{{ states.sensor.nhl_sensor.attributes.away_score }}'
-        entity_picture_template: '{{ states.sensor.nhl_sensor.attributes.away_logo }}'
-      home_team:
-        friendly_name_template: '{{ states.sensor.nhl_sensor.attributes.home_name }}'
-        value_template: '{{ states.sensor.nhl_sensor.attributes.get("home_score", "-") }}'
-        entity_picture_template: '{{ states.sensor.nhl_sensor.attributes.home_logo }}'
-```
-  
-`ui-lovelace.yaml`
-
-Change `sensor.nhl_sensor` to your sensor's `device_id`:
-```yaml
-type: entities
-show_header_toggle: false
-entities:
-  - entity: sensor.nhl_sensor
-  - entity: sensor.away_team
-  - entity: sensor.home_team
-```
-
-**The below will only work on Home Assistant Core 2021.8.X or later:**
-
-`configuration.yaml`
-
-Change `sensor.nhl_sensor` to your sensor's `device_id`:
 ```yaml
 template:
   - sensor:
-    - unique_id: away_team
-      name: '{{ states.sensor.nhl_sensor.attributes.get("away_name", "") }}'
-      state: '{{ states.sensor.nhl_sensor.attributes.get("away_score", "") }}'
-      picture: '{{ states.sensor.nhl_sensor.attributes.get("away_logo", "") }}'
-  - sensor:
-    - unique_id: home_team
-      name: '{{ states.sensor.nhl_sensor.attributes.get("home_name", "") }}'
-      state: '{{ states.sensor.nhl_sensor.attributes.get("home_score", "") }}'
-      picture: '{{ states.sensor.nhl_sensor.attributes.get("home_logo", "") }}'
-```
-  
-`ui-lovelace.yaml`
-
-Change `sensor.nhl_sensor` to your sensor's `device_id`:
-```yaml
-type: entities
-show_header_toggle: false
-entities:
-  - entity: sensor.nhl_sensor
-  - entity: sensor.template_away_team
-  - entity: sensor.template_home_team
+      - name: "{{ state_attr('sensor.canadiens', 'away_name') or 'Away Team' }}"
+        unique_id: nhl_away_team
+        state: "{{ state_attr('sensor.canadiens', 'away_score') }}"
+        picture: "{{ state_attr('sensor.canadiens', 'away_logo') }}"
+      - name: "{{ state_attr('sensor.canadiens', 'home_name') or 'Home Team' }}"
+        unique_id: nhl_home_team
+        state: "{{ state_attr('sensor.canadiens', 'home_score') }}"
+        picture: "{{ state_attr('sensor.canadiens', 'home_logo') }}"
 ```
 
-If you have [Lovelace Card Mod](https://github.com/thomasloven/lovelace-card-mod) installed, you can center the team icons by changing `ui-lovelace.yaml` to this:
+## Lovelace Card
+
 ```yaml
 type: entities
+title: NHL Scoreboard
 show_header_toggle: false
 entities:
-  - entity: sensor.nhl_sensor
-  - entity: sensor.template_away_team
+  - entity: sensor.canadiens
+  - entity: sensor.nhl_away_team
+  - entity: sensor.nhl_home_team
+```
+
+## Optional Card Mod Styling
+
+If you use Lovelace Card Mod, you can center the team logos:
+
+```yaml
+type: entities
+title: NHL Scoreboard
+show_header_toggle: false
+entities:
+  - entity: sensor.canadiens
+  - entity: sensor.nhl_away_team
     card_mod:
       style:
         hui-generic-entity-row$: |
@@ -87,7 +55,7 @@ entities:
             background-size: contain;
             background-repeat: no-repeat;
           }
-  - entity: sensor.template_home_team
+  - entity: sensor.nhl_home_team
     card_mod:
       style:
         hui-generic-entity-row$: |
@@ -97,3 +65,8 @@ entities:
             background-repeat: no-repeat;
           }
 ```
+
+Related docs:
+
+- [README.md](./README.md)
+- [automations.md](./automations.md)

@@ -1,9 +1,10 @@
 {
   "domain": "nhl_api",
-  "version": "0.13.5",
+  "version": "1.0.0",
   "name": "NHL API",
-  "documentation": "https://github.com/JayBlackedOut/hass-nhlapi",
+  "documentation": "https://github.com/markh0338/hass-nhlapi",
+  "config_flow": true,
   "dependencies": [],
-  "codeowners": ["@jayblackedout"],
-  "requirements": ["pynhl==0.6.3"]
+  "codeowners": ["@markh0338"],
+  "requirements": []
 }
