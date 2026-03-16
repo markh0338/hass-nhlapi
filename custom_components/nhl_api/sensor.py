@@ -34,7 +34,7 @@ from .const import CONF_ABBREV, DEFAULT_NAME, DOMAIN, TEAM_ABBREV_RE
 
 _LOGGER = logging.getLogger(__name__)
 
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 
 PREGAME_SCAN_INTERVAL = timedelta(seconds=10)
 LIVE_SCAN_INTERVAL = timedelta(seconds=2)
@@ -325,9 +325,7 @@ class NHLDataUpdateCoordinator(DataUpdateCoordinator[NHLSensorData]):
             scheduled_run is not None
             and self._consecutive_refresh_failures == 0
             and scheduled_run > dt_util.utcnow()
-            and (
-                self._next_update_utc is None or scheduled_run < self._next_update_utc
-            )
+            and (self._next_update_utc is None or scheduled_run < self._next_update_utc)
         ):
             self._schedule_next_update(scheduled_run - self._get_polling_delta())
             _LOGGER.debug(
