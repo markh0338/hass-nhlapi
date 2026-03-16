@@ -1,6 +1,6 @@
 {
   "domain": "nhl_api",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "name": "NHL API",
   "documentation": "https://github.com/markh0338/hass-nhlapi",
   "config_flow": true,
