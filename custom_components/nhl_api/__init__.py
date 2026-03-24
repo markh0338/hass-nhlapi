@@ -10,6 +10,7 @@ from homeassistant.const import CONF_NAME, CONF_SCAN_INTERVAL
 from homeassistant.core import HomeAssistant
 
 from .const import CONF_ABBREV, DEFAULT_NAME, DOMAIN, PLATFORMS
+from .helpers import normalize_team_abbrev
 from .sensor import NHLDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -24,7 +25,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up NHL API from a config entry."""
     hass.data.setdefault(DOMAIN, {})
-    team_abbrev = str(entry.data[CONF_ABBREV]).strip().upper()
+    team_abbrev = normalize_team_abbrev(entry.data[CONF_ABBREV])
     name = str(entry.data.get(CONF_NAME) or DEFAULT_NAME)
     scan_interval = timedelta(seconds=int(entry.data[CONF_SCAN_INTERVAL]))
 
