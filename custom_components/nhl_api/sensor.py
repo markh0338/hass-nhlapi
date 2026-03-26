@@ -8,6 +8,7 @@ import random
 import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from collections.abc import Callable
 from typing import Any
 
 import homeassistant.util.dt as dt_util
@@ -31,6 +32,12 @@ from homeassistant.helpers.update_coordinator import (
 )
 
 from .const import CONF_ABBREV, DEFAULT_NAME, DOMAIN, TEAM_ABBREV_RE
+from .helpers import (
+    get_next_season_id,
+    get_season_id,
+    is_same_local_day,
+    normalize_team_abbrev,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -38,7 +45,6 @@ __version__ = "1.0.1"
 
 PREGAME_SCAN_INTERVAL = timedelta(seconds=10)
 LIVE_SCAN_INTERVAL = timedelta(seconds=2)
-POSTGAME_SCAN_INTERVAL = timedelta(seconds=600)
 SCHEDULE_REFRESH_SAME_DAY = timedelta(minutes=10)
 SCHEDULE_REFRESH_PREGAME = timedelta(minutes=5)
 SCHEDULE_REFRESH_LIVE = timedelta(minutes=15)
@@ -55,6 +61,14 @@ API_RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
 API_RETRY_BACKOFF_SECONDS = 0.4
 API_RETRY_JITTER_SECONDS = 0.2
 MAX_SEEN_GOAL_IDS = 32
+ERROR_DIAGNOSTIC_SENSOR_KEYS = frozenset(
+    {"api_last_error", "api_error_count", "api_timeout_count"}
+)
+MANUAL_DIAGNOSTIC_SENSOR_KEYS = frozenset({"manual_refresh_count"})
+LIVE_GAME_STATES = frozenset({"LIVE", "CRIT"})
+PREFERRED_GAME_STATES = frozenset({"PRE", *LIVE_GAME_STATES})
+POSTGAME_STATES = frozenset({"FINAL", "OFF"})
+GOAL_TRACKING_GAME_STATES = frozenset({*LIVE_GAME_STATES, *POSTGAME_STATES})
 
 
 @dataclass(slots=True)
@@ -178,6 +192,12 @@ DIAGNOSTIC_SENSORS: tuple[NHLDiagnosticSensorDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda coordinator: coordinator._last_good_game_refresh_utc,
     ),
+    NHLDiagnosticSensorDescription(
+        key="manual_refresh_count",
+        name="Manual Refresh Count",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda coordinator: coordinator._manual_refresh_count,
+    ),
 )
 
 
@@ -201,7 +221,7 @@ async def async_setup_entry(
     coordinator: NHLDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id][
         "coordinator"
     ]
-    team_abbrev = str(entry.data[CONF_ABBREV]).strip().upper()
+    team_abbrev = normalize_team_abbrev(entry.data[CONF_ABBREV])
     name = str(entry.data.get(CONF_NAME) or DEFAULT_NAME)
 
     if not TEAM_ABBREV_RE.match(team_abbrev):
@@ -222,7 +242,7 @@ async def async_setup_entry(
     async_add_entities(
         [NHLSensor(coordinator, entry, name, team_abbrev)]
         + [
-            NHLDiagnosticSensor(coordinator, entry, name, team_abbrev, description)
+            NHLDiagnosticSensor(coordinator, entry, team_abbrev, description)
             for description in DIAGNOSTIC_SENSORS
         ]
     )
@@ -260,7 +280,6 @@ class NHLDataUpdateCoordinator(DataUpdateCoordinator[NHLSensorData]):
         )
         self._session = async_get_clientsession(hass)
         self.team_abbrev = team_abbrev.upper()
-        self.sensor_name = name
         self.live_scan_interval = max(scan_interval, LIVE_SCAN_INTERVAL)
 
         self._game_id: int | None = None
@@ -269,7 +288,7 @@ class NHLDataUpdateCoordinator(DataUpdateCoordinator[NHLSensorData]):
         self._seen_goal_event_ids: set[str] = set()
         self._last_goal_event_id: str | None = None
         self._next_schedule_lookup = dt_util.utcnow()
-        self._schedule_unsub: Any | None = None
+        self._schedule_unsub: Callable[[], None] | None = None
 
         self._last_refresh_started_utc: datetime | None = None
         self._last_refresh_duration_ms = 0
@@ -282,6 +301,8 @@ class NHLDataUpdateCoordinator(DataUpdateCoordinator[NHLSensorData]):
         self._last_attempt_utc: datetime | None = None
         self._last_good_game_refresh_utc: datetime | None = None
         self._next_update_utc: datetime | None = None
+        self._diagnostic_publish_token = 0
+        self._manual_refresh_count = 0
         self._tracked_game_start: datetime | None = None
         self._consecutive_refresh_failures = 0
         self._last_scheduled_interval: timedelta | None = None
@@ -307,11 +328,13 @@ class NHLDataUpdateCoordinator(DataUpdateCoordinator[NHLSensorData]):
         """Cancel scheduled callbacks on unload/remove."""
         if self._schedule_unsub is not None:
             self._schedule_unsub()
-            self._schedule_unsub: Any | None = None
+            self._schedule_unsub = None
         _LOGGER.debug("Stopped NHL coordinator for team=%s", self.team_abbrev)
 
     async def async_manual_refresh(self) -> None:
         """Run an on-demand refresh without delaying the next automatic update."""
+        self._diagnostic_publish_token += 1
+        self._manual_refresh_count += 1
         scheduled_run = self._next_update_utc
         _LOGGER.debug(
             "Manual refresh requested for team=%s game_id=%s scheduled_run=%s",
@@ -339,7 +362,7 @@ class NHLDataUpdateCoordinator(DataUpdateCoordinator[NHLSensorData]):
         """Schedule the next refresh using the current effective cadence."""
         if self._schedule_unsub is not None:
             self._schedule_unsub()
-            self._schedule_unsub: Any | None = None
+            self._schedule_unsub = None
 
         interval = ERROR_RETRY_INTERVAL if failure else self._get_polling_delta()
         next_run = now + interval
@@ -378,25 +401,15 @@ class NHLDataUpdateCoordinator(DataUpdateCoordinator[NHLSensorData]):
         """
         try:
             await self.async_refresh()
-        except Exception as err:  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             # Logging is handled inside _async_update_data / async_refresh.
             # We swallow here only to keep the scheduler alive.
-            if self._consecutive_refresh_failures >= 3:
-                _LOGGER.warning(
-                    "Scheduled refresh repeatedly failing for team=%s game_id=%s failures=%s next_retry_utc=%s last_error=%s",
-                    self.team_abbrev,
-                    self._game_id,
-                    self._consecutive_refresh_failures,
-                    self._next_update_utc.isoformat() if self._next_update_utc else "",
-                    err,
-                )
-            else:
-                _LOGGER.debug(
-                    "Scheduled refresh raised for team=%s game_id=%s failure_count=%s; next retry already queued",
-                    self.team_abbrev,
-                    self._game_id,
-                    self._consecutive_refresh_failures,
-                )
+            _LOGGER.debug(
+                "Scheduled refresh raised for team=%s game_id=%s failure_count=%s; next retry already queued",
+                self.team_abbrev,
+                self._game_id,
+                self._consecutive_refresh_failures,
+            )
 
     async def _async_update_data(self) -> NHLSensorData:
         """Fetch data from the NHL API."""
@@ -433,7 +446,7 @@ class NHLDataUpdateCoordinator(DataUpdateCoordinator[NHLSensorData]):
                     self._format_log_datetime(self._next_update_utc),
                     err,
                 )
-            if not isinstance(err, UpdateFailed):
+            else:
                 _LOGGER.exception(
                     "Failed to refresh NHL sensor data for team=%s game_id=%s",
                     self.team_abbrev,
@@ -457,57 +470,10 @@ class NHLDataUpdateCoordinator(DataUpdateCoordinator[NHLSensorData]):
         previous_game_id = self._game_id
         previous_game_state = self._tracked_game_state
         if self._should_refresh_schedule(now_utc):
-            schedule_game, fetched_any_schedule = await self._async_get_relevant_game(
-                now_utc
-            )
-            if schedule_game is not None:
-                new_game_id = schedule_game.get("id")
-                if new_game_id != self._game_id:
-                    self._reset_goal_tracking()
-                    _LOGGER.info(
-                        "Tracking NHL game changed for team=%s previous_game_id=%s new_game_id=%s scheduled_state=%s start=%s",
-                        self.team_abbrev,
-                        self._game_id,
-                        new_game_id,
-                        str(schedule_game.get("gameState") or "").upper() or None,
-                        schedule_game.get("startTimeUTC"),
-                    )
-                self._game_id = new_game_id
-                self._tracked_game_start = dt_util.parse_datetime(
-                    schedule_game.get("startTimeUTC")
-                )
-            elif self._game_id is None and not fetched_any_schedule:
-                raise UpdateFailed("Unable to fetch NHL schedule data")
-            elif schedule_game is None:
-                if self._game_id is not None:
-                    _LOGGER.info(
-                        "No relevant NHL game found for team=%s; clearing tracked game previous_game_id=%s previous_state=%s",
-                        self.team_abbrev,
-                        self._game_id,
-                        self._tracked_game_state,
-                    )
-                    self._reset_goal_tracking()
-                self._game_id = None
-                self._tracked_game_state = None
-                self._tracked_game_start = None
-
-            self._next_schedule_lookup = now_utc + self._get_schedule_refresh_delta(
-                now_utc
-            )
+            await self._async_refresh_tracked_game(now_utc)
 
         if self._game_id is None:
-            self._tracked_game_state = None
-            attrs = {
-                "next_game_date": "",
-                "next_game_time": "",
-                "next_game_datetime": "",
-                "goal_tracked_team": False,
-            }
-            return NHLSensorData(
-                state="No Game Scheduled",
-                attrs=attrs,
-                tracked_game_state=None,
-            )
+            return self._build_no_game_sensor_data()
 
         game_landing = await self._async_fetch_json(
             f"/gamecenter/{self._game_id}/landing"
@@ -517,9 +483,106 @@ class NHLDataUpdateCoordinator(DataUpdateCoordinator[NHLSensorData]):
                 f"Unable to fetch game landing data for game_id={self._game_id}"
             )
 
+        game_state = self._update_tracked_game_state(
+            game_landing,
+            now_utc,
+            previous_game_id=previous_game_id,
+            previous_game_state=previous_game_state,
+        )
+
+        attrs = self._build_base_attributes(game_landing)
+        await self._async_add_goal_attributes(game_landing, attrs)
+
+        if game_state == "FUT":
+            state = self._format_next_game_display(attrs.get("next_game_datetime"))
+        else:
+            state = game_state or "No Game Scheduled"
+
+        return NHLSensorData(state=state, attrs=attrs, tracked_game_state=game_state)
+
+    async def _async_refresh_tracked_game(self, now_utc: datetime) -> None:
+        """Refresh which game should currently be tracked."""
+        schedule_game, fetched_any_schedule = await self._async_get_relevant_game(
+            now_utc
+        )
+
+        if schedule_game is not None:
+            self._set_tracked_game(schedule_game)
+        elif not fetched_any_schedule:
+            if self._game_id is None:
+                raise UpdateFailed("Unable to fetch NHL schedule data")
+            _LOGGER.debug(
+                "Schedule refresh failed for team=%s; keeping existing tracked game game_id=%s state=%s",
+                self.team_abbrev,
+                self._game_id,
+                self._tracked_game_state,
+            )
+        else:
+            self._clear_tracked_game()
+
+        self._next_schedule_lookup = now_utc + self._get_schedule_refresh_delta(now_utc)
+
+    def _set_tracked_game(self, schedule_game: dict[str, Any]) -> None:
+        """Update tracked game details from schedule data."""
+        new_game_id = schedule_game.get("id")
+        if new_game_id != self._game_id:
+            self._reset_goal_tracking()
+            _LOGGER.info(
+                "Tracking NHL game changed for team=%s previous_game_id=%s new_game_id=%s scheduled_state=%s start=%s",
+                self.team_abbrev,
+                self._game_id,
+                new_game_id,
+                str(schedule_game.get("gameState") or "").upper() or None,
+                schedule_game.get("startTimeUTC"),
+            )
+
+        self._game_id = new_game_id
+        self._tracked_game_start = dt_util.parse_datetime(
+            schedule_game.get("startTimeUTC")
+        )
+
+    def _clear_tracked_game(self) -> None:
+        """Clear tracked game details when no relevant game is found."""
+        if self._game_id is not None:
+            _LOGGER.info(
+                "No relevant NHL game found for team=%s; clearing tracked game previous_game_id=%s previous_state=%s",
+                self.team_abbrev,
+                self._game_id,
+                self._tracked_game_state,
+            )
+            self._reset_goal_tracking()
+
+        self._game_id = None
+        self._tracked_game_state = None
+        self._tracked_game_start = None
+
+    def _build_no_game_sensor_data(self) -> NHLSensorData:
+        """Build the default state when no game is being tracked."""
+        self._tracked_game_state = None
+        return NHLSensorData(
+            state="No Game Scheduled",
+            attrs={
+                "next_game_date": "",
+                "next_game_time": "",
+                "next_game_datetime": None,
+                "goal_tracked_team": False,
+            },
+            tracked_game_state=None,
+        )
+
+    def _update_tracked_game_state(
+        self,
+        game_landing: dict[str, Any],
+        now_utc: datetime,
+        *,
+        previous_game_id: int | None,
+        previous_game_state: str | None,
+    ) -> str | None:
+        """Update tracked game state from landing data and log meaningful changes."""
         self._last_good_game_refresh_utc = now_utc
         game_state = str(game_landing.get("gameState") or "").upper() or None
         self._tracked_game_state = game_state
+
         if game_state != previous_game_state or self._game_id != previous_game_id:
             _LOGGER.info(
                 "NHL game state updated for team=%s game_id=%s previous_state=%s new_state=%s away_score=%s home_score=%s period=%s time_remaining=%s",
@@ -533,15 +596,7 @@ class NHLDataUpdateCoordinator(DataUpdateCoordinator[NHLSensorData]):
                 game_landing.get("clock", {}).get("timeRemaining"),
             )
 
-        attrs = self._build_base_attributes(game_landing)
-        await self._async_add_goal_attributes(game_landing, attrs)
-
-        if game_state == "FUT":
-            state = self._format_next_game_display(attrs.get("next_game_datetime"))
-        else:
-            state = game_state or "No Game Scheduled"
-
-        return NHLSensorData(state=state, attrs=attrs, tracked_game_state=game_state)
+        return game_state
 
     def _reset_goal_tracking(self) -> None:
         """Reset goal tracking when moving to a new game.
@@ -560,17 +615,13 @@ class NHLDataUpdateCoordinator(DataUpdateCoordinator[NHLSensorData]):
             return SCHEDULE_REFRESH_IDLE
         if self._tracked_game_state == "PRE":
             return PREGAME_SCAN_INTERVAL
-        if self._tracked_game_state in {"LIVE", "CRIT"}:
+        if self._tracked_game_state in LIVE_GAME_STATES:
             return self.live_scan_interval
         if self._tracked_game_state == "FUT":
-            tracked_start = self._tracked_game_start
-            if tracked_start is not None:
-                local_now = dt_util.as_local(dt_util.utcnow())
-                local_start = dt_util.as_local(tracked_start)
-                if local_start.date() == local_now.date():
-                    return FUTURE_GAME_SCAN_INTERVAL_SAME_DAY
+            if is_same_local_day(self._tracked_game_start, dt_util.utcnow()):
+                return FUTURE_GAME_SCAN_INTERVAL_SAME_DAY
             return FUTURE_GAME_SCAN_INTERVAL_IDLE
-        if self._tracked_game_state in {"FINAL", "OFF"}:
+        if self._tracked_game_state in POSTGAME_STATES:
             return SCHEDULE_REFRESH_POSTGAME
         self._log_unknown_game_state(self._tracked_game_state)
         return SCHEDULE_REFRESH_IDLE
@@ -587,20 +638,16 @@ class NHLDataUpdateCoordinator(DataUpdateCoordinator[NHLSensorData]):
         """Return schedule refresh cadence based on current context."""
         if self._game_id is None or self._tracked_game_state is None:
             return SCHEDULE_REFRESH_IDLE
-        if self._tracked_game_state in {"LIVE", "CRIT"}:
+        if self._tracked_game_state in LIVE_GAME_STATES:
             return SCHEDULE_REFRESH_LIVE
         if self._tracked_game_state == "PRE":
             return SCHEDULE_REFRESH_PREGAME
-        if self._tracked_game_state in {"FINAL", "OFF"}:
+        if self._tracked_game_state in POSTGAME_STATES:
             return SCHEDULE_REFRESH_POSTGAME
 
-        # FUT state: check the currently tracked start time, not stale prior coordinator data.
         if self._tracked_game_state == "FUT":
-            if self._tracked_game_start is not None:
-                local_now = dt_util.as_local(now_utc)
-                local_start = dt_util.as_local(self._tracked_game_start)
-                if local_start.date() == local_now.date():
-                    return SCHEDULE_REFRESH_SAME_DAY
+            if is_same_local_day(self._tracked_game_start, now_utc):
+                return SCHEDULE_REFRESH_SAME_DAY
             return SCHEDULE_REFRESH_IDLE
 
         self._log_unknown_game_state(self._tracked_game_state)
@@ -618,8 +665,8 @@ class NHLDataUpdateCoordinator(DataUpdateCoordinator[NHLSensorData]):
 
         Returns ``(game, fetched_any_schedule)``.
         """
-        seasons = [self._get_season_id(now_utc)]
-        next_season = self._get_next_season_id(now_utc)
+        seasons = [get_season_id(now_utc)]
+        next_season = get_next_season_id(now_utc)
         if next_season not in seasons:
             seasons.append(next_season)
 
@@ -644,9 +691,8 @@ class NHLDataUpdateCoordinator(DataUpdateCoordinator[NHLSensorData]):
             key=lambda game: game.get("startTimeUTC") or "9999-12-31T00:00:00Z",
         )
 
-        live_states = {"LIVE", "CRIT", "PRE"}
         for game in games:
-            if str(game.get("gameState", "")).upper() in live_states:
+            if str(game.get("gameState", "")).upper() in PREFERRED_GAME_STATES:
                 return game, True
 
         upcoming_games: list[tuple[datetime, dict[str, Any]]] = []
@@ -673,7 +719,7 @@ class NHLDataUpdateCoordinator(DataUpdateCoordinator[NHLSensorData]):
     ) -> None:
         """Populate goal data and fire events for newly seen goals."""
         game_state = str(game_landing.get("gameState") or "").upper()
-        if game_state not in {"LIVE", "CRIT", "FINAL", "OFF"}:
+        if game_state not in GOAL_TRACKING_GAME_STATES:
             attrs["goal_tracked_team"] = False
             return
 
@@ -756,10 +802,7 @@ class NHLDataUpdateCoordinator(DataUpdateCoordinator[NHLSensorData]):
             )
 
             for play in unseen_goals:
-                event_id = play.get("eventId")
-                event_id_str = str(event_id) if event_id is not None else None
-                if event_id_str is None:
-                    continue
+                event_id_str = str(play.get("eventId"))
                 event_payload = self._build_goal_payload(
                     play, roster_map, home_team, away_team, game_landing
                 )
@@ -874,7 +917,7 @@ class NHLDataUpdateCoordinator(DataUpdateCoordinator[NHLSensorData]):
         event_id = play.get("eventId")
         try:
             event_id_value = int(event_id) if event_id is not None else None
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             event_id_value = None
 
         home_score = details.get("homeScore")
@@ -1005,7 +1048,6 @@ class NHLDataUpdateCoordinator(DataUpdateCoordinator[NHLSensorData]):
                             # ContentTypeError — both are caught below.
                             data = await response.json(content_type=None)
                         except (ContentTypeError, ValueError) as json_err:
-                            self._api_error_count += 1
                             self._api_last_error = (
                                 f"JSON decode error for {path}: {json_err}"
                             )
@@ -1023,6 +1065,7 @@ class NHLDataUpdateCoordinator(DataUpdateCoordinator[NHLSensorData]):
                                 json_err,
                             )
                             if attempt >= API_MAX_RETRIES:
+                                self._api_error_count += 1
                                 return None
                             # Fall through to backoff and retry.
                         else:
@@ -1031,7 +1074,6 @@ class NHLDataUpdateCoordinator(DataUpdateCoordinator[NHLSensorData]):
                             return data
 
                     else:
-                        self._api_error_count += 1
                         self._api_last_error = f"HTTP {response.status} for {path}"
                         should_retry = (
                             response.status in API_RETRYABLE_STATUSES
@@ -1048,6 +1090,7 @@ class NHLDataUpdateCoordinator(DataUpdateCoordinator[NHLSensorData]):
                             should_retry,
                         )
                         if not should_retry:
+                            self._api_error_count += 1
                             _LOGGER.warning(
                                 "NHL API request failed for team=%s game_id=%s endpoint=%s status=%s attempts=%s",
                                 self.team_abbrev,
@@ -1081,7 +1124,6 @@ class NHLDataUpdateCoordinator(DataUpdateCoordinator[NHLSensorData]):
 
             except asyncio.TimeoutError:
                 self._api_timeout_count += 1
-                self._api_error_count += 1
                 self._api_last_error = f"Timeout for {path}"
                 log_fn = (
                     _LOGGER.warning if attempt >= API_MAX_RETRIES else _LOGGER.debug
@@ -1095,9 +1137,9 @@ class NHLDataUpdateCoordinator(DataUpdateCoordinator[NHLSensorData]):
                     API_MAX_RETRIES + 1,
                 )
                 if attempt >= API_MAX_RETRIES:
+                    self._api_error_count += 1
                     return None
             except Exception as err:  # noqa: BLE001
-                self._api_error_count += 1
                 self._api_last_error = f"{type(err).__name__}: {err}"
                 log_fn = (
                     _LOGGER.warning if attempt >= API_MAX_RETRIES else _LOGGER.debug
@@ -1112,6 +1154,7 @@ class NHLDataUpdateCoordinator(DataUpdateCoordinator[NHLSensorData]):
                     err,
                 )
                 if attempt >= API_MAX_RETRIES:
+                    self._api_error_count += 1
                     return None
 
             # Exponential backoff with a small random jitter to avoid
@@ -1121,7 +1164,7 @@ class NHLDataUpdateCoordinator(DataUpdateCoordinator[NHLSensorData]):
             )
             await asyncio.sleep(backoff)
 
-        return None
+        return None  # pragma: no cover
 
     @staticmethod
     def _format_log_datetime(value: datetime | None) -> str:
@@ -1167,27 +1210,13 @@ class NHLDataUpdateCoordinator(DataUpdateCoordinator[NHLSensorData]):
             elif market in {"H", "HOME"}:
                 result["home"].append(network)
             else:
+                _LOGGER.debug(
+                    "NHL API returned unrecognised broadcast market %r; treating as national",
+                    broadcast.get("market"),
+                )
                 result["national"].append(network)
 
         return result
-
-    @staticmethod
-    def _get_season_id(now_utc: datetime) -> str:
-        """Return season id string (for example, 20252026)."""
-        if now_utc.month >= 9:
-            start_year = now_utc.year
-        else:
-            start_year = now_utc.year - 1
-        return f"{start_year}{start_year + 1}"
-
-    @staticmethod
-    def _get_next_season_id(now_utc: datetime) -> str:
-        """Return the next season id string."""
-        if now_utc.month >= 9:
-            start_year = now_utc.year + 1
-        else:
-            start_year = now_utc.year
-        return f"{start_year}{start_year + 1}"
 
 
 class NHLSensor(CoordinatorEntity[NHLDataUpdateCoordinator], SensorEntity):
@@ -1211,8 +1240,8 @@ class NHLSensor(CoordinatorEntity[NHLDataUpdateCoordinator], SensorEntity):
         self._attr_unique_id = f"{DOMAIN}_{self._entry_id}_state"
 
     @property
-    def state(self) -> str | None:
-        """Return the current state."""
+    def native_value(self) -> str | None:
+        """Return the current state value."""
         return self.coordinator.data.state if self.coordinator.data else None
 
     @property
@@ -1230,14 +1259,6 @@ class NHLSensor(CoordinatorEntity[NHLDataUpdateCoordinator], SensorEntity):
         """Return the device for this team's NHL entities."""
         return _device_info(self._team_abbrev)
 
-    async def async_added_to_hass(self) -> None:
-        """Handle entity addition."""
-        await super().async_added_to_hass()
-
-    async def async_will_remove_from_hass(self) -> None:
-        """Handle entity removal."""
-        await super().async_will_remove_from_hass()
-
 
 class NHLDiagnosticSensor(CoordinatorEntity[NHLDataUpdateCoordinator], SensorEntity):
     """Diagnostic sensor exposing coordinator runtime details."""
@@ -1248,7 +1269,6 @@ class NHLDiagnosticSensor(CoordinatorEntity[NHLDataUpdateCoordinator], SensorEnt
         self,
         coordinator: NHLDataUpdateCoordinator,
         entry: ConfigEntry,
-        name: str,
         team_abbrev: str,
         description: NHLDiagnosticSensorDescription,
     ) -> None:
@@ -1260,6 +1280,9 @@ class NHLDiagnosticSensor(CoordinatorEntity[NHLDataUpdateCoordinator], SensorEnt
         self._attr_has_entity_name = True
         self._attr_name = description.name
         self._attr_unique_id = f"{DOMAIN}_{self._entry_id}_{description.key}"
+        self._last_published_value: Any = None
+        self._last_published_main_state: str | None = None
+        self._last_publish_token = 0
 
     @property
     def native_value(self) -> Any:
@@ -1275,3 +1298,40 @@ class NHLDiagnosticSensor(CoordinatorEntity[NHLDataUpdateCoordinator], SensorEnt
     def device_info(self) -> dict[str, Any]:
         """Return the device for this team's NHL entities."""
         return _device_info(self._team_abbrev)
+
+    async def async_added_to_hass(self) -> None:
+        """Handle entity addition."""
+        await super().async_added_to_hass()
+        self._last_published_value = self.native_value
+        self._last_published_main_state = (
+            self.coordinator.data.state if self.coordinator.data else None
+        )
+        self._last_publish_token = self.coordinator._diagnostic_publish_token
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Reduce recorder/logbook churn from high-frequency diagnostic updates.
+
+        The primary team sensor should continue to publish every meaningful
+        refresh, but these diagnostic entities are mostly runtime internals.
+        Publish diagnostic updates only when:
+        - the main sensor state changed, or
+        - one of the error-focused diagnostics changed.
+        """
+        new_value = self.native_value
+        main_state = self.coordinator.data.state if self.coordinator.data else None
+        publish_token = self.coordinator._diagnostic_publish_token
+        should_publish = main_state != self._last_published_main_state
+
+        if self.entity_description.key in ERROR_DIAGNOSTIC_SENSOR_KEYS:
+            should_publish = should_publish or new_value != self._last_published_value
+        if self.entity_description.key in MANUAL_DIAGNOSTIC_SENSOR_KEYS:
+            should_publish = should_publish or new_value != self._last_published_value
+
+        should_publish = should_publish or publish_token != self._last_publish_token
+
+        if should_publish:
+            self._last_published_value = new_value
+            self._last_published_main_state = main_state
+            self._last_publish_token = publish_token
+            self.async_write_ha_state()

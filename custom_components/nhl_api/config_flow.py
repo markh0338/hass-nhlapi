@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
 from typing import Any
 
 import homeassistant.util.dt as dt_util
@@ -25,6 +24,7 @@ from .const import (
     TEAM_ABBREVS,
     TEAM_ABBREV_RE,
 )
+from .helpers import get_season_id, normalize_team_abbrev
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -39,15 +39,6 @@ TEAM_ABBREV_SELECTOR = selector(
 )
 
 
-def _get_season_id(now_utc: datetime) -> str:
-    """Return season id string (for example, 20252026)."""
-    if now_utc.month >= 9:
-        start_year = now_utc.year
-    else:
-        start_year = now_utc.year - 1
-    return f"{start_year}{start_year + 1}"
-
-
 async def _async_validate_team(hass: HomeAssistant, team_abbrev: str) -> None:
     """Validate that the NHL API recognizes the supplied team abbreviation."""
     if not TEAM_ABBREV_RE.match(team_abbrev):
@@ -58,7 +49,7 @@ async def _async_validate_team(hass: HomeAssistant, team_abbrev: str) -> None:
         raise ValueError("invalid_team")
 
     session = async_get_clientsession(hass)
-    season = _get_season_id(dt_util.utcnow())
+    season = get_season_id(dt_util.utcnow())
     url = f"{API_BASE}/club-schedule-season/{team_abbrev}/{season}"
 
     try:
@@ -112,7 +103,7 @@ class NHLAPIConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            team_abbrev = str(user_input[CONF_ABBREV]).strip().upper()
+            team_abbrev = normalize_team_abbrev(user_input[CONF_ABBREV])
             name = (
                 str(user_input.get(CONF_NAME) or DEFAULT_NAME).strip() or DEFAULT_NAME
             )
