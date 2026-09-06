@@ -7,9 +7,12 @@ import re
 from homeassistant.const import Platform
 
 DOMAIN = "nhl_api"
+VERSION = "1.1.0"
 PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BUTTON]
 
 CONF_ABBREV = "team_abbrev"
+CONF_POSTGAME_MINUTES = "postgame_minutes"
+DEFAULT_POSTGAME_MINUTES = 15
 
 TEAM_ABBREVS: tuple[str, ...] = (
     "ANA",

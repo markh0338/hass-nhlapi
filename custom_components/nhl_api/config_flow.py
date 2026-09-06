@@ -1,37 +1,33 @@
-"""Config flow for the NHL API integration."""
+"""Configuration and options flows for NHL API."""
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 import homeassistant.util.dt as dt_util
 import voluptuous as vol
-from aiohttp import ClientError, ClientTimeout
 from homeassistant import config_entries
 from homeassistant.const import CONF_NAME, CONF_SCAN_INTERVAL
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import selector
 
+from .api import NHLApiClient, RateLimit
 from .const import (
-    API_BASE,
-    API_TIMEOUT_SECONDS,
     CONF_ABBREV,
+    CONF_POSTGAME_MINUTES,
     DEFAULT_NAME,
+    DEFAULT_POSTGAME_MINUTES,
     DEFAULT_SCAN_INTERVAL_SECONDS,
     DOMAIN,
     TEAM_ABBREVS,
-    TEAM_ABBREV_RE,
 )
 from .helpers import get_season_id, normalize_team_abbrev
-
-_LOGGER = logging.getLogger(__name__)
 
 TEAM_ABBREV_SELECTOR = selector(
     {
         "select": {
-            "options": list(TEAM_ABBREVS),
+            "options": [team.lower() for team in TEAM_ABBREVS],
             "translation_key": "team_abbrev",
             "mode": "dropdown",
         }
@@ -39,111 +35,101 @@ TEAM_ABBREV_SELECTOR = selector(
 )
 
 
+def _settings_schema(settings: dict[str, Any]) -> dict:
+    """Use the same constraints in initial setup and options."""
+    return {
+        vol.Optional(CONF_NAME, default=settings.get(CONF_NAME, DEFAULT_NAME)): str,
+        vol.Optional(
+            CONF_SCAN_INTERVAL,
+            default=settings.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL_SECONDS),
+        ): vol.All(vol.Coerce(int), vol.Range(min=DEFAULT_SCAN_INTERVAL_SECONDS)),
+        vol.Optional(
+            CONF_POSTGAME_MINUTES,
+            default=settings.get(CONF_POSTGAME_MINUTES, DEFAULT_POSTGAME_MINUTES),
+        ): vol.All(vol.Coerce(int), vol.Range(min=0, max=60)),
+    }
+
+
 async def _async_validate_team(hass: HomeAssistant, team_abbrev: str) -> None:
-    """Validate that the NHL API recognizes the supplied team abbreviation."""
-    if not TEAM_ABBREV_RE.match(team_abbrev):
-        _LOGGER.debug("Rejected invalid NHL team abbreviation format: %s", team_abbrev)
-        raise ValueError("invalid_team")
+    """Separate unknown teams from unavailable or malformed upstream data."""
     if team_abbrev not in TEAM_ABBREVS:
-        _LOGGER.debug("Rejected unknown NHL team abbreviation: %s", team_abbrev)
         raise ValueError("invalid_team")
-
-    session = async_get_clientsession(hass)
-    season = get_season_id(dt_util.utcnow())
-    url = f"{API_BASE}/club-schedule-season/{team_abbrev}/{season}"
-
-    try:
-        async with session.get(
-            url, timeout=ClientTimeout(total=API_TIMEOUT_SECONDS)
-        ) as response:
-            if response.status == 404:
-                _LOGGER.debug(
-                    "NHL team validation returned 404 for team=%s season=%s",
-                    team_abbrev,
-                    season,
-                )
-                raise ValueError("invalid_team")
-            if response.status != 200:
-                _LOGGER.warning(
-                    "Unexpected status validating NHL team=%s season=%s status=%s",
-                    team_abbrev,
-                    season,
-                    response.status,
-                )
-                raise ConnectionError(f"Unexpected HTTP {response.status}")
-            data = await response.json(content_type=None)
-    except ValueError:
-        raise
-    except (ClientError, TimeoutError, ConnectionError) as err:
-        _LOGGER.warning(
-            "Unable to validate NHL team=%s season=%s: %s",
-            team_abbrev,
-            season,
-            err,
-        )
-        raise ConnectionError from err
-    except Exception as err:  # noqa: BLE001
-        _LOGGER.exception("Unexpected error validating NHL team %s", team_abbrev)
-        raise RuntimeError from err
-
-    if "games" not in data:
-        raise ValueError("invalid_team")
-    _LOGGER.debug(
-        "Validated NHL team abbreviation team=%s season=%s", team_abbrev, season
+    client = NHLApiClient(
+        async_get_clientsession(hass),
+        hass.data.setdefault(f"{DOMAIN}_rate_limit", RateLimit()),
     )
+    data = await client.fetch(
+        f"/club-schedule-season/{team_abbrev}/{get_season_id(dt_util.utcnow())}"
+    )
+    if data is None:
+        raise ConnectionError("Unable to fetch a valid NHL schedule")
 
 
 class NHLAPIConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for NHL API."""
+    """Create one stable config entry per NHL team."""
 
     VERSION = 1
 
-    async def async_step_user(self, user_input: dict[str, Any] | None = None):
-        """Handle the initial step."""
-        errors: dict[str, str] = {}
+    @staticmethod
+    @callback
+    def async_get_options_flow(
+        config_entry: config_entries.ConfigEntry,
+    ) -> NHLAPIOptionsFlow:
+        return NHLAPIOptionsFlow()
 
+    async def async_step_user(self, user_input: dict[str, Any] | None = None):
+        errors: dict[str, str] = {}
         if user_input is not None:
             team_abbrev = normalize_team_abbrev(user_input[CONF_ABBREV])
-            name = (
-                str(user_input.get(CONF_NAME) or DEFAULT_NAME).strip() or DEFAULT_NAME
-            )
-            scan_interval = int(user_input[CONF_SCAN_INTERVAL])
-
             await self.async_set_unique_id(team_abbrev)
             self._abort_if_unique_id_configured()
-
             try:
                 await _async_validate_team(self.hass, team_abbrev)
             except ValueError:
                 errors["base"] = "invalid_team"
             except ConnectionError:
                 errors["base"] = "cannot_connect"
-            except Exception:  # noqa: BLE001
-                errors["base"] = "unknown"
             else:
+                name = (
+                    str(user_input.get(CONF_NAME) or DEFAULT_NAME).strip()
+                    or DEFAULT_NAME
+                )
                 return self.async_create_entry(
                     title=name if name != DEFAULT_NAME else team_abbrev,
                     data={
                         CONF_ABBREV: team_abbrev,
                         CONF_NAME: name,
-                        CONF_SCAN_INTERVAL: scan_interval,
+                        CONF_SCAN_INTERVAL: user_input.get(
+                            CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL_SECONDS
+                        ),
+                        CONF_POSTGAME_MINUTES: user_input.get(
+                            CONF_POSTGAME_MINUTES, DEFAULT_POSTGAME_MINUTES
+                        ),
                     },
                 )
-
         return self.async_show_form(
             step_id="user",
+            errors=errors,
             data_schema=vol.Schema(
                 {
                     vol.Required(CONF_ABBREV): TEAM_ABBREV_SELECTOR,
-                    vol.Optional(CONF_NAME, default=DEFAULT_NAME): str,
-                    vol.Optional(
-                        CONF_SCAN_INTERVAL,
-                        default=DEFAULT_SCAN_INTERVAL_SECONDS,
-                    ): vol.All(
-                        vol.Coerce(int),
-                        vol.Range(min=DEFAULT_SCAN_INTERVAL_SECONDS),
-                    ),
+                    **_settings_schema(user_input or {}),
                 }
             ),
-            errors=errors,
+        )
+
+
+class NHLAPIOptionsFlow(config_entries.OptionsFlowWithReload):
+    """Change polling/name/grace without recreating entities or adding listeners."""
+
+    async def async_step_init(self, user_input: dict[str, Any] | None = None):
+        if user_input is not None:
+            settings = {**self.config_entry.options, **user_input}
+            settings[CONF_NAME] = (
+                str(settings.get(CONF_NAME) or DEFAULT_NAME).strip() or DEFAULT_NAME
+            )
+            return self.async_create_entry(title="", data=settings)
+        settings = {**self.config_entry.data, **self.config_entry.options}
+        return self.async_show_form(
+            step_id="init", data_schema=vol.Schema(_settings_schema(settings))
         )

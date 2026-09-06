@@ -1,0 +1,348 @@
+{
+  "source": "https://api-web.nhle.com/v1/gamecenter/2025030315/play-by-play",
+  "retrieved_utc": "2026-09-06",
+  "id": 2025030315,
+  "gameState": "OFF",
+  "plays": [
+    {
+      "eventId": 103,
+      "periodDescriptor": {
+        "number": 1,
+        "periodType": "REG",
+        "maxRegulationPeriods": 3
+      },
+      "timeInPeriod": "09:17",
+      "timeRemaining": "10:43",
+      "situationCode": "1551",
+      "typeDescKey": "goal",
+      "sortOrder": 124,
+      "details": {
+        "scoringPlayerId": 8475791,
+        "scoringPlayerTotal": 5,
+        "assist1PlayerId": 8482702,
+        "assist1PlayerTotal": 2,
+        "assist2PlayerId": 8482809,
+        "assist2PlayerTotal": 10,
+        "eventOwnerTeamId": 12,
+        "awayScore": 0,
+        "homeScore": 1
+      }
+    },
+    {
+      "eventId": 399,
+      "periodDescriptor": {
+        "number": 1,
+        "periodType": "REG",
+        "maxRegulationPeriods": 3
+      },
+      "timeInPeriod": "15:12",
+      "timeRemaining": "04:48",
+      "situationCode": "1551",
+      "typeDescKey": "goal",
+      "sortOrder": 207,
+      "details": {
+        "scoringPlayerId": 8482702,
+        "scoringPlayerTotal": 9,
+        "assist1PlayerId": 8475791,
+        "assist1PlayerTotal": 10,
+        "assist2PlayerId": 8482100,
+        "assist2PlayerTotal": 1,
+        "eventOwnerTeamId": 12,
+        "awayScore": 0,
+        "homeScore": 2
+      }
+    },
+    {
+      "eventId": 472,
+      "periodDescriptor": {
+        "number": 1,
+        "periodType": "REG",
+        "maxRegulationPeriods": 3
+      },
+      "timeInPeriod": "16:52",
+      "timeRemaining": "03:08",
+      "situationCode": "1551",
+      "typeDescKey": "goal",
+      "sortOrder": 230,
+      "details": {
+        "scoringPlayerId": 8480762,
+        "scoringPlayerTotal": 3,
+        "assist1PlayerId": 8477478,
+        "assist1PlayerTotal": 3,
+        "eventOwnerTeamId": 12,
+        "awayScore": 0,
+        "homeScore": 3
+      }
+    },
+    {
+      "eventId": 604,
+      "periodDescriptor": {
+        "number": 2,
+        "periodType": "REG",
+        "maxRegulationPeriods": 3
+      },
+      "timeInPeriod": "07:19",
+      "timeRemaining": "12:41",
+      "situationCode": "1551",
+      "typeDescKey": "goal",
+      "sortOrder": 361,
+      "details": {
+        "scoringPlayerId": 8482809,
+        "scoringPlayerTotal": 5,
+        "assist1PlayerId": 8475791,
+        "assist1PlayerTotal": 11,
+        "assist2PlayerId": 8482702,
+        "assist2PlayerTotal": 3,
+        "eventOwnerTeamId": 12,
+        "awayScore": 0,
+        "homeScore": 4
+      }
+    },
+    {
+      "eventId": 110,
+      "periodDescriptor": {
+        "number": 2,
+        "periodType": "REG",
+        "maxRegulationPeriods": 3
+      },
+      "timeInPeriod": "18:02",
+      "timeRemaining": "01:58",
+      "situationCode": "1451",
+      "typeDescKey": "goal",
+      "sortOrder": 481,
+      "details": {
+        "scoringPlayerId": 8476906,
+        "scoringPlayerTotal": 2,
+        "assist1PlayerId": 8482093,
+        "assist1PlayerTotal": 5,
+        "assist2PlayerId": 8477940,
+        "assist2PlayerTotal": 5,
+        "eventOwnerTeamId": 12,
+        "awayScore": 0,
+        "homeScore": 5
+      }
+    },
+    {
+      "eventId": 901,
+      "periodDescriptor": {
+        "number": 3,
+        "periodType": "REG",
+        "maxRegulationPeriods": 3
+      },
+      "timeInPeriod": "10:50",
+      "timeRemaining": "09:10",
+      "situationCode": "1541",
+      "typeDescKey": "goal",
+      "sortOrder": 645,
+      "details": {
+        "scoringPlayerId": 8481540,
+        "scoringPlayerTotal": 6,
+        "assist1PlayerId": 8483457,
+        "assist1PlayerTotal": 13,
+        "eventOwnerTeamId": 8,
+        "awayScore": 1,
+        "homeScore": 5
+      }
+    },
+    {
+      "eventId": 1021,
+      "periodDescriptor": {
+        "number": 3,
+        "periodType": "REG",
+        "maxRegulationPeriods": 3
+      },
+      "timeInPeriod": "16:19",
+      "timeRemaining": "03:41",
+      "situationCode": "0651",
+      "typeDescKey": "goal",
+      "sortOrder": 708,
+      "details": {
+        "scoringPlayerId": 8482093,
+        "scoringPlayerTotal": 3,
+        "assist1PlayerId": 8478427,
+        "assist1PlayerTotal": 3,
+        "assist2PlayerId": 8480830,
+        "assist2PlayerTotal": 4,
+        "eventOwnerTeamId": 12,
+        "awayScore": 1,
+        "homeScore": 6
+      }
+    }
+  ],
+  "rosterSpots": [
+    {
+      "teamId": 12,
+      "playerId": 8475791,
+      "firstName": {
+        "default": "Taylor"
+      },
+      "lastName": {
+        "default": "Hall"
+      },
+      "sweaterNumber": 71,
+      "positionCode": "L",
+      "headshot": "https://assets.nhle.com/mugs/nhl/20252026/CAR/8475791.png"
+    },
+    {
+      "teamId": 12,
+      "playerId": 8476906,
+      "firstName": {
+        "default": "Shayne"
+      },
+      "lastName": {
+        "default": "Gostisbehere"
+      },
+      "sweaterNumber": 4,
+      "positionCode": "D",
+      "headshot": "https://assets.nhle.com/mugs/nhl/20252026/CAR/8476906.png"
+    },
+    {
+      "teamId": 12,
+      "playerId": 8477478,
+      "firstName": {
+        "default": "William"
+      },
+      "lastName": {
+        "default": "Carrier"
+      },
+      "sweaterNumber": 28,
+      "positionCode": "L",
+      "headshot": "https://assets.nhle.com/mugs/nhl/20252026/CAR/8477478.png"
+    },
+    {
+      "teamId": 12,
+      "playerId": 8477940,
+      "firstName": {
+        "default": "Nikolaj"
+      },
+      "lastName": {
+        "default": "Ehlers"
+      },
+      "sweaterNumber": 27,
+      "positionCode": "L",
+      "headshot": "https://assets.nhle.com/mugs/nhl/20252026/CAR/8477940.png"
+    },
+    {
+      "teamId": 12,
+      "playerId": 8478427,
+      "firstName": {
+        "default": "Sebastian"
+      },
+      "lastName": {
+        "default": "Aho"
+      },
+      "sweaterNumber": 20,
+      "positionCode": "C",
+      "headshot": "https://assets.nhle.com/mugs/nhl/20252026/CAR/8478427.png"
+    },
+    {
+      "teamId": 12,
+      "playerId": 8480762,
+      "firstName": {
+        "default": "Eric"
+      },
+      "lastName": {
+        "default": "Robinson"
+      },
+      "sweaterNumber": 50,
+      "positionCode": "L",
+      "headshot": "https://assets.nhle.com/mugs/nhl/20252026/CAR/8480762.png"
+    },
+    {
+      "teamId": 12,
+      "playerId": 8480830,
+      "firstName": {
+        "default": "Andrei",
+        "cs": "Andrej",
+        "sk": "Andrej"
+      },
+      "lastName": {
+        "default": "Svechnikov",
+        "cs": "Sve\u010dnikov",
+        "fi": "Svetshnikov",
+        "sk": "Sve\u010dnikov"
+      },
+      "sweaterNumber": 37,
+      "positionCode": "R",
+      "headshot": "https://assets.nhle.com/mugs/nhl/20252026/CAR/8480830.png"
+    },
+    {
+      "teamId": 8,
+      "playerId": 8481540,
+      "firstName": {
+        "default": "Cole"
+      },
+      "lastName": {
+        "default": "Caufield"
+      },
+      "sweaterNumber": 13,
+      "positionCode": "R",
+      "headshot": "https://assets.nhle.com/mugs/nhl/20252026/MTL/8481540.png"
+    },
+    {
+      "teamId": 12,
+      "playerId": 8482093,
+      "firstName": {
+        "default": "Seth"
+      },
+      "lastName": {
+        "default": "Jarvis"
+      },
+      "sweaterNumber": 24,
+      "positionCode": "C",
+      "headshot": "https://assets.nhle.com/mugs/nhl/20252026/CAR/8482093.png"
+    },
+    {
+      "teamId": 12,
+      "playerId": 8482100,
+      "firstName": {
+        "default": "Alexander"
+      },
+      "lastName": {
+        "default": "Nikishin"
+      },
+      "sweaterNumber": 21,
+      "positionCode": "D",
+      "headshot": "https://assets.nhle.com/mugs/nhl/20252026/CAR/8482100.png"
+    },
+    {
+      "teamId": 12,
+      "playerId": 8482702,
+      "firstName": {
+        "default": "Logan"
+      },
+      "lastName": {
+        "default": "Stankoven"
+      },
+      "sweaterNumber": 22,
+      "positionCode": "C",
+      "headshot": "https://assets.nhle.com/mugs/nhl/20252026/CAR/8482702.png"
+    },
+    {
+      "teamId": 12,
+      "playerId": 8482809,
+      "firstName": {
+        "default": "Jackson"
+      },
+      "lastName": {
+        "default": "Blake"
+      },
+      "sweaterNumber": 53,
+      "positionCode": "R",
+      "headshot": "https://assets.nhle.com/mugs/nhl/20252026/CAR/8482809.png"
+    },
+    {
+      "teamId": 8,
+      "playerId": 8483457,
+      "firstName": {
+        "default": "Lane"
+      },
+      "lastName": {
+        "default": "Hutson"
+      },
+      "sweaterNumber": 48,
+      "positionCode": "D",
+      "headshot": "https://assets.nhle.com/mugs/nhl/20252026/MTL/8483457.png"
+    }
+  ]
+}
