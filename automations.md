@@ -1,6 +1,6 @@
 # Automation Examples
 
-Each newly observed goal produces an `nhl_goal` event. The integration seeds its in-memory goal cache when it first starts tracking a game, so automations only react to new scoring plays and do not replay historical goals from earlier in the game.
+Each newly observed goal produces an `nhl_goal` event. Games observed before puck drop emit the first goal. Starting or reloading midgame baselines existing goals without replaying them. The cache is in memory; corrections to a previously seen goal do not reannounce it, and shootout attempts are excluded. Filter both the configured team and whether that team scored, especially when tracking both opponents.
 
 Useful event fields:
 
@@ -24,6 +24,7 @@ trigger:
   - platform: event
     event_type: nhl_goal
     event_data:
+      team_abbrev: MTL
       goal_tracked_team: true
 action:
   - service: tts.google_translate_say
@@ -45,6 +46,7 @@ trigger:
     event_type: nhl_goal
     event_data:
       team_abbrev: MTL
+      goal_tracked_team: true
 action:
   - service: notify.mobile_app_iphone
     data:
@@ -62,9 +64,10 @@ alias: Montreal Power Play Goal
 trigger:
   - platform: event
     event_type: nhl_goal
+    event_data:
+      team_abbrev: MTL
+      goal_tracked_team: true
 condition:
-  - condition: template
-    value_template: "{{ trigger.event.data.goal_tracked_team }}"
   - condition: template
     value_template: "{{ trigger.event.data.goal_type == 'PPG' }}"
 action:

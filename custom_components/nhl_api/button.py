@@ -10,18 +10,17 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
-from .sensor import NHLDataUpdateCoordinator, _device_info
+from .coordinator import NHLConfigEntry, NHLDataUpdateCoordinator
+from .entity import _device_info
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: NHLConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up NHL API buttons from a config entry."""
-    coordinator: NHLDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id][
-        "coordinator"
-    ]
+    coordinator: NHLDataUpdateCoordinator = entry.runtime_data
     async_add_entities([NHLRefreshButton(coordinator, entry)])
 
 

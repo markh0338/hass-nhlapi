@@ -1,0 +1,40 @@
+{
+  "id": 2026010006,
+  "gameState": "FUT",
+  "startTimeUTC": "2026-09-19T23:00:00Z",
+  "awayTeam": {
+    "id": 8,
+    "commonName": {
+      "default": "Canadiens"
+    },
+    "abbrev": "MTL",
+    "placeName": {
+      "default": "Montr\u00e9al"
+    },
+    "placeNameWithPreposition": {
+      "default": "Montr\u00e9al",
+      "fr": "de Montr\u00e9al"
+    },
+    "logo": "https://assets.nhle.com/logos/nhl/svg/MTL_light.svg",
+    "darkLogo": "https://assets.nhle.com/logos/nhl/svg/MTL_dark.svg",
+    "record": "48-24-10"
+  },
+  "homeTeam": {
+    "id": 10,
+    "commonName": {
+      "default": "Maple Leafs"
+    },
+    "abbrev": "TOR",
+    "placeName": {
+      "default": "Toronto"
+    },
+    "placeNameWithPreposition": {
+      "default": "Toronto",
+      "fr": "de Toronto"
+    },
+    "logo": "https://assets.nhle.com/logos/nhl/svg/TOR_light.svg",
+    "darkLogo": "https://assets.nhle.com/logos/nhl/svg/TOR_dark.svg",
+    "record": "32-36-14"
+  },
+  "source": "https://api-web.nhle.com/v1/gamecenter/2026010006/landing"
+}

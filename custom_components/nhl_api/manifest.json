@@ -1,10 +1,15 @@
 {
   "domain": "nhl_api",
-  "version": "1.0.1",
   "name": "NHL API",
-  "documentation": "https://github.com/markh0338/hass-nhlapi",
+  "codeowners": [
+    "@markh0338"
+  ],
   "config_flow": true,
   "dependencies": [],
-  "codeowners": ["@markh0338"],
-  "requirements": []
+  "documentation": "https://github.com/markh0338/hass-nhlapi",
+  "integration_type": "service",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/markh0338/hass-nhlapi/issues",
+  "requirements": [],
+  "version": "1.1.0"
 }
