@@ -187,31 +187,24 @@ class IntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("name", data)
         self.assertNotIn("entry_id", data)
 
-    async def test_diagnostic_defaults_and_bounded_publication(self):
+    async def test_last_attempt_diagnostic_publishes_each_changed_value(self):
         entry = await self.create_entry()
         description = next(
-            d for d in sensor.DIAGNOSTIC_SENSORS if d.key == "refresh_count"
+            d for d in sensor.DIAGNOSTIC_SENSORS if d.key == "last_attempt"
         )
         entity = sensor.NHLDiagnosticSensor(
             entry.runtime_data, entry, "MTL", description
         )
         self.assertFalse(entity.entity_registry_enabled_default)
         entity._last_published_main_state = entry.runtime_data.data.state
-        entity._last_published_value = entry.runtime_data._refresh_count
-        entity._last_publish_monotonic = 100
-        entry.runtime_data._refresh_count += 1
-        with (
-            patch.object(entity, "async_write_ha_state") as write,
-            patch.object(sensor.time, "monotonic", return_value=120),
-        ):
-            entity._handle_coordinator_update()
-            write.assert_not_called()
-        with (
-            patch.object(entity, "async_write_ha_state") as write,
-            patch.object(sensor.time, "monotonic", return_value=161),
-        ):
+        entity._last_published_value = datetime(2026, 9, 29, tzinfo=UTC)
+        entry.runtime_data.api.last_attempt = datetime(2026, 9, 29, 0, 0, 2, tzinfo=UTC)
+        with patch.object(entity, "async_write_ha_state") as write:
             entity._handle_coordinator_update()
             write.assert_called_once()
+        with patch.object(entity, "async_write_ha_state") as write:
+            entity._handle_coordinator_update()
+            write.assert_not_called()
 
     async def test_platform_setup_failure_shuts_down_coordinator(self):
         # Create through the flow but defer automatic platform setup.

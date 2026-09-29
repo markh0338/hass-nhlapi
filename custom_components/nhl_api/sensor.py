@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -22,12 +21,6 @@ from .const import CONF_ABBREV, DEFAULT_NAME, DOMAIN
 from .coordinator import NHLConfigEntry, NHLDataUpdateCoordinator
 from .entity import _device_info
 from .helpers import normalize_team_abbrev
-
-ERROR_DIAGNOSTIC_SENSOR_KEYS = frozenset(
-    {"api_last_error", "api_error_count", "api_timeout_count", "goal_feed_available"}
-)
-MANUAL_DIAGNOSTIC_SENSOR_KEYS = frozenset({"manual_refresh_count"})
-DIAGNOSTIC_PUBLISH_SECONDS = 60
 
 
 @dataclass(frozen=True, slots=True)
@@ -247,10 +240,12 @@ class NHLDiagnosticSensor(CoordinatorEntity[NHLDataUpdateCoordinator], SensorEnt
         self._last_published_value: Any = None
         self._last_published_main_state: str | None = None
         self._last_publish_token = 0
-        self._last_publish_monotonic = time.monotonic()
-        self._attr_entity_registry_enabled_default = (
-            description.key in ERROR_DIAGNOSTIC_SENSOR_KEYS
-        )
+        self._attr_entity_registry_enabled_default = description.key in {
+            "api_last_error",
+            "api_error_count",
+            "api_timeout_count",
+            "goal_feed_available",
+        }
 
     @property
     def native_value(self) -> Any:
@@ -278,34 +273,17 @@ class NHLDiagnosticSensor(CoordinatorEntity[NHLDataUpdateCoordinator], SensorEnt
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        """Reduce recorder/logbook churn from high-frequency diagnostic updates.
-
-        The primary team sensor should continue to publish every meaningful
-        refresh, but these diagnostic entities are mostly runtime internals.
-        Publish diagnostic updates only when:
-        - the main sensor state changed, or
-        - one of the error-focused diagnostics changed, or
-        - a manual refresh was requested, or
-        - a value changed and at least one minute has elapsed.
-        """
+        """Publish an enabled diagnostic whenever its runtime value changes."""
         new_value = self.native_value
         main_state = self.coordinator.data.state if self.coordinator.data else None
         publish_token = self.coordinator._diagnostic_publish_token
-        should_publish = main_state != self._last_published_main_state or (
-            time.monotonic() - self._last_publish_monotonic
-            >= DIAGNOSTIC_PUBLISH_SECONDS
-            and new_value != self._last_published_value
+        should_publish = (
+            new_value != self._last_published_value
+            or main_state != self._last_published_main_state
+            or publish_token != self._last_publish_token
         )
 
-        if self.entity_description.key in ERROR_DIAGNOSTIC_SENSOR_KEYS:
-            should_publish = should_publish or new_value != self._last_published_value
-        if self.entity_description.key in MANUAL_DIAGNOSTIC_SENSOR_KEYS:
-            should_publish = should_publish or new_value != self._last_published_value
-
-        should_publish = should_publish or publish_token != self._last_publish_token
-
         if should_publish:
-            self._last_publish_monotonic = time.monotonic()
             self._last_published_value = new_value
             self._last_published_main_state = main_state
             self._last_publish_token = publish_token

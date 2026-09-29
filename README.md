@@ -148,7 +148,7 @@ The integration also exposes diagnostic sensors for refresh timing and API healt
 - `Goal Feed Available`
 - `Last Good Goal Refresh`
 
-Most timing and counter sensors are disabled by default for new entities. Existing enabled/disabled choices are preserved. Enabled diagnostics publish changed values at most once per minute during steady play, with immediate updates for main-state transitions, error changes, and manual refreshes. Download a runtime snapshot from the integration’s **Download diagnostics** menu for support.
+Most timing and counter sensors are disabled by default for new entities. Existing enabled/disabled choices are preserved. Enabled diagnostics publish whenever their underlying runtime value changes, so timestamps and counters reflect the actual polling cadence. Download a runtime snapshot from the integration’s **Download diagnostics** menu for support.
 
 A diagnostic `Refresh` button forces an immediate refresh. If the normal next update is sooner than the newly computed cadence, that earlier next update is preserved; if the refresh discovers a more urgent state such as `LIVE`, the coordinator keeps the sooner urgent cadence.
 
