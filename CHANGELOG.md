@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.1.2 — 2026-10-19
+
+Current-release polish for Home Assistant 2026.10.2. No functional changes.
+
+- Align the release version everywhere: the 1.1.1 release shipped with a `manifest.json` version and runtime `VERSION` of 1.1.0, so devices and diagnostics reported 1.1.0. All version references now agree, and 1.1.2 validates cleanly against the full test suite.
+- Add an MIT `LICENSE` file and license metadata. The integration is a full rewrite of the original `hass-nhlapi` project by JayBlackedOut, which the README credits.
+- Test Home Assistant 2026.3.0, 2026.9.1, and 2026.10.2 on Python 3.14 in the validation workflow, which now also runs nightly, and refresh the development dependency to 2026.10.2.
+- Keep the repository Marketplace-ready — the same `hacs.json` and catalog, `custom_components/nhl_api` structure, and matching manifest and release tag versions — ahead of Home Assistant 2026.11, where HACS ships built in as the Marketplace. This release keeps the 2026.3.0 minimum, so it is offered to users on 2026.3.0 or newer; a 1.2.0 release with the 2026.11.0 Marketplace minimum follows for Home Assistant 2026.11.
+
+### Upgrading from 1.1.1
+
+Nothing to do. Update from HACS or the Marketplace and restart Home Assistant. Entity IDs, unique IDs, the `nhl_goal` event, and its payload keys are unchanged. Existing HACS installations migrate to the built-in Marketplace automatically when Home Assistant starts after updating to 2026.11.
+
 ## 1.1.0 — 2026-09-06
 
 Season-readiness fixes for Home Assistant 2026.9.1, with the 2026.3.0 minimum retained.
