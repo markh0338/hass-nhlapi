@@ -4,7 +4,7 @@
 
 Track a single NHL team in Home Assistant, expose schedule and scoreboard data as sensor attributes, and fire `nhl_goal` events for automations when new goals are observed.
 
-Version **1.1.0** targets Home Assistant **2026.9.1** and retains support for **2026.3.0 or newer** (Python 3.14). See [CHANGELOG.md](./CHANGELOG.md) for upgrade notes.
+Version **1.1.2** targets Home Assistant **2026.10.2** and retains support for **2026.3.0 or newer** (Python 3.14). Starting with Home Assistant 2026.11, HACS ships built in as the **Marketplace**; a 1.2.0 release with the 2026.11.0 Marketplace minimum follows for it. See [CHANGELOG.md](./CHANGELOG.md) for upgrade notes.
 
 This repository builds on the original `hass-nhlapi` project by JayBlackedOut.
 
@@ -17,7 +17,7 @@ This repository builds on the original `hass-nhlapi` project by JayBlackedOut.
 
 ## Installation
 
-### HACS
+### HACS (Home Assistant 2026.10 or older)
 
 1. Open HACS and search for `NHL API`. If it is not listed, add this repository as a custom repository with category **Integration**.
 2. Install the integration.
@@ -211,7 +211,7 @@ uv run ruff check custom_components tests
 uv run ruff format --check custom_components tests
 ```
 
-The validation workflow tests Home Assistant 2026.3.0 and 2026.9.1 on Python 3.14 and runs hassfest and HACS validation. Fixture tests cover scoring, lifecycle, rate limits, options/reload, translations, and diagnostics. Before a season release, also observe a live game through pregame, scoring, final, and the next fixture; fixture tests cannot certify upstream API availability.
+The validation workflow tests Home Assistant 2026.3.0, 2026.9.1, and 2026.10.2 on Python 3.14 and runs hassfest and HACS validation, nightly and on every push. Fixture tests cover scoring, lifecycle, rate limits, options/reload, translations, and diagnostics. Before a season release, also observe a live game through pregame, scoring, final, and the next fixture; fixture tests cannot certify upstream API availability.
 
 ## Additional Docs
 
@@ -227,3 +227,7 @@ The validation workflow tests Home Assistant 2026.3.0 and 2026.9.1 on Python 3.1
 - [Drew Hynes' Unofficial Documentation](https://gitlab.com/dword4/nhlapi)
 - Adam Pritchard's NHL Score API
 - [The Reddit post that inspired this project](https://www.reddit.com/r/homeassistant/comments/b9vioe/got_home_assistant_to_grab_the_game_info_for_my/)
+
+## License
+
+This project is licensed under the [MIT License](./LICENSE). The integration is a full rewrite; the original `hass-nhlapi` project by JayBlackedOut that inspired it is credited above.

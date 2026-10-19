@@ -3,6 +3,8 @@ name: Validate
 on:
   push:
   pull_request:
+  schedule:
+    - cron: "0 0 * * *"
   workflow_dispatch:
 
 permissions:
@@ -14,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        homeassistant: ["2026.3.0", "2026.9.1"]
+        homeassistant: ["2026.3.0", "2026.9.1", "2026.10.2"]
     steps:
       - uses: actions/checkout@v7
         with:
