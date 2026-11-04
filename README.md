@@ -4,7 +4,7 @@
 
 Track a single NHL team in Home Assistant, expose schedule and scoreboard data as sensor attributes, and fire `nhl_goal` events for automations when new goals are observed.
 
-Version **1.1.2** targets Home Assistant **2026.10.2** and retains support for **2026.3.0 or newer** (Python 3.14). Starting with Home Assistant 2026.11, HACS ships built in as the **Marketplace**; a 1.2.0 release with the 2026.11.0 Marketplace minimum follows for it. See [CHANGELOG.md](./CHANGELOG.md) for upgrade notes.
+Version **1.2.0** targets Home Assistant **2026.11** with the built-in **Marketplace** (HACS brought into Home Assistant core). The Marketplace offers 1.2.0 on Home Assistant **2026.11.0 or newer**; users on 2026.3.0–2026.10 are offered **1.1.1** instead. The code itself remains compatible with **2026.3.0 or newer** (Python 3.14), which the validation workflow continues to test. See [CHANGELOG.md](./CHANGELOG.md) for upgrade notes.
 
 This repository builds on the original `hass-nhlapi` project by JayBlackedOut.
 
@@ -17,9 +17,18 @@ This repository builds on the original `hass-nhlapi` project by JayBlackedOut.
 
 ## Installation
 
+### Marketplace (Home Assistant 2026.11 or newer)
+
+1. Go to **Settings > Marketplace**. Starting with Home Assistant 2026.11, HACS ships built in as the Marketplace; existing HACS installations migrate automatically when Home Assistant starts after the update.
+2. Search for `NHL API` and install the integration.
+3. Restart Home Assistant when prompted.
+4. Go to **Settings > Devices & Services > Add Integration**.
+5. Search for `NHL API`.
+6. Choose a team from the dropdown, then set the optional name, live scan interval, and postgame tracking duration.
+
 ### HACS (Home Assistant 2026.10 or older)
 
-1. Open HACS and search for `NHL API`. If it is not listed, add this repository as a custom repository with category **Integration**.
+1. Open HACS and search for `NHL API`. If it is not listed, add this repository as a custom repository with category **Integration**. Users on these versions are offered **1.1.1** rather than 1.2.0.
 2. Install the integration.
 3. Restart Home Assistant.
 4. Go to **Settings > Devices & Services > Add Integration**.
@@ -211,7 +220,7 @@ uv run ruff check custom_components tests
 uv run ruff format --check custom_components tests
 ```
 
-The validation workflow tests Home Assistant 2026.3.0, 2026.9.1, and 2026.10.2 on Python 3.14 and runs hassfest and HACS validation, nightly and on every push. Fixture tests cover scoring, lifecycle, rate limits, options/reload, translations, and diagnostics. Before a season release, also observe a live game through pregame, scoring, final, and the next fixture; fixture tests cannot certify upstream API availability.
+The validation workflow tests Home Assistant 2026.3.0, 2026.9.1, and 2026.10.2 on Python 3.14 and runs hassfest and HACS validation. Fixture tests cover scoring, lifecycle, rate limits, options/reload, translations, and diagnostics. Before a season release, also observe a live game through pregame, scoring, final, and the next fixture; fixture tests cannot certify upstream API availability. Re-run the suite against the Home Assistant 2026.11 beta or final release before publishing a release that targets it.
 
 ## Additional Docs
 
