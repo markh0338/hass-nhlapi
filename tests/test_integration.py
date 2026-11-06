@@ -36,9 +36,11 @@ class IntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.hass.config_entries = ConfigEntries(self.hass, {})
         if hasattr(dr, "async_setup"):
             dr.async_setup(self.hass)
+        # Since 2026.11.0 the entity registry awaits config entry initialization,
+        # so config entries must be initialized before loading the registries.
+        await self.hass.config_entries.async_initialize()
         await dr.async_load(self.hass)
         await er.async_load(self.hass)
-        await self.hass.config_entries.async_initialize()
         patch(
             "custom_components.nhl_api.coordinator.async_get_clientsession",
             return_value=MagicMock(),

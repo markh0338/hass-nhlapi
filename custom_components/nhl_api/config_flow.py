@@ -131,5 +131,7 @@ class NHLAPIOptionsFlow(config_entries.OptionsFlowWithReload):
             return self.async_create_entry(title="", data=settings)
         settings = {**self.config_entry.data, **self.config_entry.options}
         return self.async_show_form(
-            step_id="init", data_schema=vol.Schema(_settings_schema(settings))
+            step_id="init",
+            data_schema=vol.Schema(_settings_schema(settings)),
+            description_placeholders={"team": self.config_entry.title},
         )

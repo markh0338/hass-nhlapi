@@ -16,7 +16,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        homeassistant: ["2026.3.0", "2026.9.1", "2026.10.2"]
+        # Add "2026.12.0" (and a beta) once it releases in early December.
+        homeassistant: ["2026.3.0", "2026.9.1", "2026.10.2", "2026.11.0"]
     steps:
       - uses: actions/checkout@v7
         with:

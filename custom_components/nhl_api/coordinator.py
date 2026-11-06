@@ -49,6 +49,9 @@ LIVE_GAME_STATES = frozenset({"LIVE", "CRIT"})
 POSTGAME_STATES = frozenset({"FINAL", "OFF"})
 GOAL_TRACKING_GAME_STATES = frozenset({*LIVE_GAME_STATES, *POSTGAME_STATES})
 
+# Sentinel for "the play-by-play feed has not been fetched this cycle".
+_PBP_UNFETCHED: object = object()
+
 
 @dataclass(slots=True)
 class NHLSensorData:
@@ -124,6 +127,7 @@ class NHLDataUpdateCoordinator(DataUpdateCoordinator[NHLSensorData]):
         self._refresh_count = 0
         self._last_good_game_refresh_utc: datetime | None = None
         self._next_update_utc: datetime | None = None
+        self._last_scheduled_delta: timedelta | None = None
         self._diagnostic_publish_token = 0
         self._manual_refresh_count = 0
         self._consecutive_refresh_failures = 0
@@ -178,7 +182,13 @@ class NHLDataUpdateCoordinator(DataUpdateCoordinator[NHLSensorData]):
         return remove
 
     async def async_refresh(self) -> None:
-        """Own queued manual/scheduled refreshes as well as their HTTP work."""
+        """Own queued manual/scheduled refreshes as well as their HTTP work.
+
+        Overlapping refreshes are safe: ``DataUpdateCoordinator.async_refresh``
+        serializes them through its debouncer lock, and goal deduplication is an
+        atomic check-then-add, so a manual refresh arriving during a scheduled
+        one cannot double-fire goal events.
+        """
         task = asyncio.current_task()
         self._refresh_tasks.add(task)
         try:
@@ -223,6 +233,7 @@ class NHLDataUpdateCoordinator(DataUpdateCoordinator[NHLSensorData]):
         next_run = deadline or now + self.effective_polling_delta
         if self.api.cooldown.active():
             next_run = max(next_run, self.api.cooldown.until)
+        self._last_scheduled_delta = next_run - now
         self._next_update_utc = next_run
         self._schedule_unsub = async_track_point_in_utc_time(
             self.hass, self._handle_scheduled_refresh, next_run
@@ -310,6 +321,18 @@ class NHLDataUpdateCoordinator(DataUpdateCoordinator[NHLSensorData]):
             interval = max(interval, self.api.cooldown.until - dt_util.utcnow())
         return interval
 
+    @property
+    def last_scheduled_delta(self) -> timedelta:
+        """Return the cadence applied to the most recent scheduling decision.
+
+        Falls back to the live effective cadence before the first schedule, so
+        the diagnostic sensor reports a correct value from startup rather than
+        recomputing a moving clock on every read.
+        """
+        if self._last_scheduled_delta is None:
+            return self.effective_polling_delta
+        return self._last_scheduled_delta
+
     async def _async_build_sensor_data(self, now_utc: datetime) -> NHLSensorData:
         """Build the sensor state and attributes for the current refresh."""
         previous_game_id = self._game_id
@@ -320,15 +343,27 @@ class NHLDataUpdateCoordinator(DataUpdateCoordinator[NHLSensorData]):
         if self._game_id is None:
             return self._build_no_game_sensor_data()
 
-        game_landing = await self._async_fetch_json(
-            f"/gamecenter/{self._game_id}/landing"
-        )
+        landing_path = f"/gamecenter/{self._game_id}/landing"
+        # Fetch the scoring feed concurrently with the gamecenter payload when we
+        # are already tracking a live or finished game, so a newly observed goal
+        # is surfaced as soon as the feed has it rather than being delayed behind
+        # the landing round-trip.
+        if (
+            self._tracked_game_state in GOAL_TRACKING_GAME_STATES
+            and now_utc >= self._next_pbp_lookup
+        ):
+            game_landing, pbp = await asyncio.gather(
+                self._async_fetch_json(landing_path),
+                self._async_fetch_json(f"/gamecenter/{self._game_id}/play-by-play"),
+            )
+        else:
+            game_landing = await self._async_fetch_json(landing_path)
+            pbp = _PBP_UNFETCHED
         if game_landing is None:
             raise UpdateFailed(
                 f"Unable to fetch game landing data for game_id={self._game_id}"
             )
 
-        validate_payload(f"/gamecenter/{self._game_id}/landing", game_landing)
         if game_landing.get("gameScheduleState", "OK") in BLOCKED_SCHEDULE_STATES:
             self._clear_tracked_game()
             self._next_schedule_lookup = now_utc
@@ -343,7 +378,7 @@ class NHLDataUpdateCoordinator(DataUpdateCoordinator[NHLSensorData]):
         )
 
         attrs = self._build_base_attributes(game_landing)
-        await self._async_add_goal_attributes(game_landing, attrs)
+        await self._async_add_goal_attributes(game_landing, attrs, pbp=pbp)
 
         if game_state == "FUT":
             state = self._format_next_game_display(attrs.get("next_game_datetime"))
@@ -629,7 +664,11 @@ class NHLDataUpdateCoordinator(DataUpdateCoordinator[NHLSensorData]):
         return recent[-1] if recent else None
 
     async def _async_add_goal_attributes(
-        self, game_landing: dict[str, Any], attrs: dict[str, Any]
+        self,
+        game_landing: dict[str, Any],
+        attrs: dict[str, Any],
+        *,
+        pbp: Any = _PBP_UNFETCHED,
     ) -> None:
         """Emit new regulation/OT goals only from a valid, matching feed."""
         game_state = game_landing["gameState"].upper()
@@ -641,20 +680,21 @@ class NHLDataUpdateCoordinator(DataUpdateCoordinator[NHLSensorData]):
             return
         now = dt_util.utcnow()
         path = f"/gamecenter/{game_landing['id']}/play-by-play"
-        pbp = None
-        if now >= self._next_pbp_lookup:
-            pbp = await self._async_fetch_json(path)
-            if pbp is not None:
-                try:
-                    validate_payload(path, pbp)
-                    if pbp["gameState"] not in GOAL_TRACKING_GAME_STATES:
-                        raise ValueError("Play-by-play state is behind the scoreboard")
-                except (ValueError, TypeError) as err:
-                    self.api.record_error(path, str(err))
-                    pbp = None
-            if pbp is None:
-                self._next_pbp_lookup = now + ERROR_RETRY_INTERVAL
+        if pbp is _PBP_UNFETCHED:
+            pbp = None
+            if now >= self._next_pbp_lookup:
+                pbp = await self._async_fetch_json(path)
+        if pbp is not None:
+            try:
+                validate_payload(path, pbp)
+                if pbp["gameState"] not in GOAL_TRACKING_GAME_STATES:
+                    raise ValueError("Play-by-play state is behind the scoreboard")
+            except (ValueError, TypeError) as err:
+                self.api.record_error(path, str(err))
+                pbp = None
         if pbp is None:
+            if now >= self._next_pbp_lookup:
+                self._next_pbp_lookup = now + ERROR_RETRY_INTERVAL
             self.goal_feed_available = False
             attrs.update(self._last_goal_attributes)
             attrs["goal_feed_available"] = False

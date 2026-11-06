@@ -4,7 +4,7 @@
 
 Track a single NHL team in Home Assistant, expose schedule and scoreboard data as sensor attributes, and fire `nhl_goal` events for automations when new goals are observed.
 
-Version **1.2.0** targets Home Assistant **2026.11** with the built-in **Marketplace** (HACS brought into Home Assistant core). The Marketplace offers 1.2.0 on Home Assistant **2026.11.0 or newer**; users on 2026.3.0–2026.10 are offered **1.1.1** instead. The code itself remains compatible with **2026.3.0 or newer** (Python 3.14), which the validation workflow continues to test. See [CHANGELOG.md](./CHANGELOG.md) for upgrade notes.
+Version **1.2.1** targets Home Assistant **2026.11** with the built-in **Marketplace** (HACS brought into Home Assistant core). The Marketplace offers 1.2.1 on Home Assistant **2026.11.0 or newer**; users on 2026.3.0–2026.10 are offered **1.1.1** instead. The code itself remains compatible with **2026.3.0 or newer** (Python 3.14), which the validation workflow continues to test. See [CHANGELOG.md](./CHANGELOG.md) for upgrade notes.
 
 This repository builds on the original `hass-nhlapi` project by JayBlackedOut.
 
@@ -28,7 +28,7 @@ This repository builds on the original `hass-nhlapi` project by JayBlackedOut.
 
 ### HACS (Home Assistant 2026.10 or older)
 
-1. Open HACS and search for `NHL API`. If it is not listed, add this repository as a custom repository with category **Integration**. Users on these versions are offered **1.1.1** rather than 1.2.0.
+1. Open HACS and search for `NHL API`. If it is not listed, add this repository as a custom repository with category **Integration**. Users on these versions are offered **1.1.1** rather than 1.2.1.
 2. Install the integration.
 3. Restart Home Assistant.
 4. Go to **Settings > Devices & Services > Add Integration**.
@@ -220,7 +220,7 @@ uv run ruff check custom_components tests
 uv run ruff format --check custom_components tests
 ```
 
-The validation workflow tests Home Assistant 2026.3.0, 2026.9.1, and 2026.10.2 on Python 3.14 and runs hassfest and HACS validation. Fixture tests cover scoring, lifecycle, rate limits, options/reload, translations, and diagnostics. Before a season release, also observe a live game through pregame, scoring, final, and the next fixture; fixture tests cannot certify upstream API availability. Re-run the suite against the Home Assistant 2026.11 beta or final release before publishing a release that targets it.
+The validation workflow tests Home Assistant 2026.3.0, 2026.9.1, 2026.10.2, and 2026.11.0 on Python 3.14 and runs hassfest and HACS validation. Fixture tests cover scoring, lifecycle, rate limits, options/reload, translations, and diagnostics. Before a season release, also observe a live game through pregame, scoring, final, and the next fixture; fixture tests cannot certify upstream API availability. Re-run the suite against the Home Assistant 2026.11 beta or final release before publishing a release that targets it.
 
 ## Additional Docs
 

@@ -324,6 +324,26 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.fire.call_args.args[1]["event_id"], GOALS[-1]["eventId"])
         self.assertTrue(self.c._final_pbp_received)
 
+    async def test_live_refresh_fetches_scoring_feed_in_the_same_cycle(self):
+        # A game already tracked as live must fetch both the gamecenter landing
+        # and the play-by-play feed in a single refresh, without a schedule walk.
+        self.c._game_id = LANDING["id"]
+        self.c._tracked_game_state = "LIVE"
+        self.c._tracked_game_start = NOW
+        self.c._goal_tracking_initialized = True
+        self.c._next_schedule_lookup = NOW + timedelta(minutes=15)
+        self.c._next_pbp_lookup = NOW
+        self.c.api.fetch.side_effect = [
+            copy.deepcopy(LANDING),
+            copy.deepcopy(PBP),
+        ]
+        await self.c._async_build_sensor_data(NOW)
+        self.assertEqual(self.c.api.fetch.call_count, 2)
+        paths = [call.args[0] for call in self.c.api.fetch.call_args_list]
+        self.assertIn(f"/gamecenter/{LANDING['id']}/landing", paths)
+        self.assertIn(f"/gamecenter/{LANDING['id']}/play-by-play", paths)
+        self.assertEqual(self.fire.call_count, len(GOALS))
+
     async def test_startup_failure_retries_in_one_minute(self):
         self.c._async_build_sensor_data = AsyncMock(
             side_effect=module.UpdateFailed("offline")
@@ -412,6 +432,43 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
         await self.c.async_manual_refresh()
         self.assertEqual(self.c._next_update_utc, NOW + timedelta(hours=2))
         self.assertEqual(self.c._async_build_sensor_data.call_count, 1)
+
+    async def test_overlapping_refreshes_do_not_double_fire_goals(self):
+        # A second refresh that lands while the first is still running is
+        # serialized by the coordinator's debouncer lock, and goal dedup keeps
+        # each play to a single nhl_goal event.
+        self.c._game_id = LANDING["id"]
+        self.c._tracked_game_state = "LIVE"
+        self.c._tracked_game_start = NOW
+        self.c._goal_tracking_initialized = True
+        self.c._next_schedule_lookup = NOW + timedelta(minutes=15)
+        self.c._next_pbp_lookup = NOW
+        self.c.api.fetch.side_effect = [
+            copy.deepcopy(LANDING),
+            copy.deepcopy(PBP),
+            copy.deepcopy(LANDING),
+            copy.deepcopy(PBP),
+        ]
+        first = asyncio.create_task(self.c.async_refresh())
+        second = asyncio.create_task(self.c.async_refresh())
+        await asyncio.gather(first, second)
+        self.assertEqual(self.fire.call_count, len(GOALS))
+        self.assertEqual(len(self.c._seen_goal_event_ids), len(GOALS))
+        self.assertEqual(len(self.c._refresh_tasks), 0)
+
+    async def test_effective_interval_is_recorded_when_scheduling(self):
+        # Before the first schedule, the diagnostic falls back to the live
+        # effective cadence; once scheduled it reflects the applied gap.
+        self.assertIsNone(self.c._last_scheduled_delta)
+        self.assertEqual(self.c.last_scheduled_delta, self.c.effective_polling_delta)
+
+        await self.c.async_start()
+        self.assertEqual(self.c._next_update_utc, NOW + timedelta(minutes=60))
+        self.assertEqual(self.c.last_scheduled_delta, timedelta(minutes=60))
+
+        self.c._tracked_game_state = "LIVE"
+        self.c._schedule_next_update(NOW)
+        self.assertEqual(self.c.last_scheduled_delta, timedelta(seconds=2))
 
     async def test_season_rollover_and_pregame_polling(self):
         for month, year in [(8, "20252026"), (9, "20262027"), (12, "20262027")]:

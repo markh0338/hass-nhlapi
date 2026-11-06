@@ -7,7 +7,7 @@ import re
 from homeassistant.const import Platform
 
 DOMAIN = "nhl_api"
-VERSION = "1.2.0"
+VERSION = "1.2.1"
 PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BUTTON]
 
 CONF_ABBREV = "team_abbrev"

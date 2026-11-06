@@ -1,6 +1,6 @@
 [project]
 name = "hass-nhlapi"
-version = "1.2.0"
+version = "1.2.1"
 description = "Track a single NHL team in Home Assistant"
 readme = "README.md"
 license = "MIT"
@@ -10,7 +10,7 @@ dependencies = []
 
 [dependency-groups]
 dev = [
-    "homeassistant==2026.10.2",
+    "homeassistant==2026.11.0",
     "pytest==9.1.1",
     "ruff==0.16.3",
 ]

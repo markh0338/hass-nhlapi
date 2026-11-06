@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Add NHL team",
-        "description": "Create an NHL API sensor for one team.",
+        "description": "Create an NHL API sensor for one team. A lower live scan interval detects goals sooner but calls the NHL API more often.",
         "data": {
           "team_abbrev": "Team",
           "name": "Name",
@@ -63,7 +63,7 @@
     "step": {
       "init": {
         "title": "NHL team options",
-        "description": "Change polling and how long the final score stays visible. Existing entity IDs are preserved.",
+        "description": "For {team}: change polling and how long the final score stays visible. Existing entity IDs are preserved.",
         "data": {
           "name": "Name",
           "scan_interval": "Live scan interval (seconds)",

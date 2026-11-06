@@ -59,7 +59,7 @@ DIAGNOSTIC_SENSORS: tuple[NHLDiagnosticSensorDescription, ...] = (
         native_unit_of_measurement="s",
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda coordinator: int(
-            coordinator.effective_polling_delta.total_seconds()
+            coordinator.last_scheduled_delta.total_seconds()
         ),
     ),
     NHLDiagnosticSensorDescription(
