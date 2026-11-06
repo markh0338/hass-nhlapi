@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.2.1 — 2026-11-06
+
+A faster, leaner live polling path plus release-hardening. No entity IDs, unique IDs, or `nhl_goal` event payload keys change.
+
+- Announce goals sooner: fetch the play-by-play scoring feed concurrently with the gamecenter payload during live and recently finished games, removing the landing round-trip from the goal-detection path. Goal deduplication and play-by-play backoff behavior are unchanged.
+- Drop a redundant re-validation of the already-validated gamecenter response on every refresh.
+- Compute the diagnostic "Effective Scan Interval" once per scheduling decision instead of recomputing a moving clock on each read.
+- Clarify the options form to show which team is being edited, and document the polling trade-off on the setup form.
+- Validate the release against Home Assistant 2026.11.0 (added to the CI matrix) and initialize config entries before the entity registry in the integration test harness to satisfy a 2026.11.0 startup-ordering requirement.
+- Add regression tests for concurrent goal-feed fetching, overlapping refreshes not double-firing goals, and effective-interval recording.
+
+### Upgrading from 1.2.0
+
+Nothing to do. Update from the Marketplace or HACS and restart Home Assistant. Entity IDs, unique IDs, the `nhl_goal` event, and its payload keys are unchanged.
+
 ## 1.2.0 — 2026-10-19
 
 Marketplace readiness for Home Assistant 2026.11, where HACS ships built in as the **Marketplace**. No functional changes.
